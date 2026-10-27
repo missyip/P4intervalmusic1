@@ -107,7 +107,7 @@ h1 {
 
 /* staff */
 .staff-box { overflow-x: auto; }
-.staff-svg { display: block; width: 100%; min-width: 520px; height: auto; cursor: crosshair; touch-action: manipulation; }
+.staff-svg { display: block; width: 100%; height: auto; cursor: crosshair; touch-action: manipulation; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .btn {
   appearance: none; font: inherit; font-size: 15px; cursor: pointer;
@@ -353,7 +353,22 @@ const staff = document.getElementById("staff");
 const SP = 24;               // space between staff lines
 const BOTTOM = 190;          // y of bottom line (E4)
 const stepY = s => BOTTOM - s * SP / 2;
-const SLOT_X0 = 238, SLOT_DX = 84;
+const SLOT_X0 = 238;
+let SLOT_DX = 84, VW = 900;   // narrower score on phones
+function layout() {
+  const narrow = document.querySelector(".wrap").clientWidth < 600;
+  SLOT_DX = narrow ? 52 : 84;
+  VW = narrow ? 650 : 900;
+  document.getElementById("staff").setAttribute("viewBox", `0 56 ${VW} 222`);
+  document.getElementById("stage-staff").setAttribute("viewBox", `0 56 ${VW} 222`);
+  document.getElementById("stage").setAttribute("viewBox", `0 0 ${VW} 330`);
+  return narrow;
+}
+let lastNarrow = layout();
+window.addEventListener("resize", () => {
+  const was = lastNarrow; lastNarrow = layout();
+  if (was !== lastNarrow && !state.playing) renderAll();
+});
 const slotX = i => SLOT_X0 + i * SLOT_DX;
 let hover = null;            // {slot, deg}
 
@@ -380,10 +395,10 @@ function solfaText(parent, x, y, deg, size, fill) {
 function drawScore(svg, xOf, activeIdx, opts = {}) {
   svg.innerHTML = "";
   const ink = "#23313b";
-  el("rect", { x: 0, y: 56, width: 900, height: 222, fill: "#ffffff" }, svg);
-  for (let i = 0; i < 5; i++) el("line", { x1: 12, x2: 884, y1: stepY(i * 2), y2: stepY(i * 2), stroke: ink, "stroke-width": 1.6 }, svg);
-  el("line", { x1: 876, x2: 876, y1: stepY(8), y2: stepY(0), stroke: ink, "stroke-width": 1.6 }, svg);
-  el("rect", { x: 880, y: stepY(8), width: 5, height: SP * 4, fill: ink }, svg);
+  el("rect", { x: 0, y: 56, width: VW, height: 222, fill: "#ffffff" }, svg);
+  for (let i = 0; i < 5; i++) el("line", { x1: 12, x2: VW - 16, y1: stepY(i * 2), y2: stepY(i * 2), stroke: ink, "stroke-width": 1.6 }, svg);
+  el("line", { x1: VW - 24, x2: VW - 24, y1: stepY(8), y2: stepY(0), stroke: ink, "stroke-width": 1.6 }, svg);
+  el("rect", { x: VW - 20, y: stepY(8), width: 5, height: SP * 4, fill: ink }, svg);
   el("line", { x1: 12, x2: 12, y1: stepY(8), y2: stepY(0), stroke: ink, "stroke-width": 1.6 }, svg);
   // treble clef: glyph units, G-line at 160, one staff space = 155 units
   const k = SP / 155;
@@ -426,7 +441,7 @@ function renderStaff(activeIdx = -1) {
     drawNoteHead(gg, x, stepY(s), "#1f6fb2");
   }
   // click catcher
-  el("rect", { x: 200, y: 56, width: 676, height: 222, fill: "transparent", id: "hit" }, staff);
+  el("rect", { x: 200, y: 56, width: VW - 224, height: 222, fill: "transparent", id: "hit" }, staff);
 }
 
 function svgPoint(svg, evt) {
@@ -435,7 +450,7 @@ function svgPoint(svg, evt) {
 }
 function hitFromEvent(evt) {
   const p = svgPoint(staff, evt);
-  if (p.x < 200 || p.x > 876) return null;
+  if (p.x < 200 || p.x > VW - 24) return null;
   let slot = Math.round((p.x - SLOT_X0) / SLOT_DX);
   slot = Math.max(0, Math.min(MAX - 1, slot));
   if (slot > state.notes.length) slot = state.notes.length;   // no gaps: next empty slot
@@ -499,8 +514,8 @@ function renderCount() {
 const stage = document.getElementById("stage");
 const stageStaff = document.getElementById("stage-staff");
 const GROUND = 282;
-const LX0 = 238, LDX = 84;            // same x as the notes on the score
-const landX = i => LX0 + i * LDX;
+const LX0 = SLOT_X0;                  // same x as the notes on the score
+const landX = i => LX0 + i * SLOT_DX;
 const jumpH = deg => deg === 0 ? 16 : 14 + deg * 26;   // 1 = 2nd ... 7 = octave
 let animalNode = null, trailLayer = null, labelLayer = null;
 
@@ -527,14 +542,14 @@ function arcPath(i, t1 = 1) {
 function renderStage() {
   stage.innerHTML = "";
   // distant hills + flowers
-  el("path", { d: "M0 230 Q120 190 240 222 T480 214 T720 220 T900 206 L900 330 L0 330 Z", fill: "#e4f2da" }, stage);
+  el("path", { d: `M0 230 Q120 190 240 222 T480 214 T720 220 T960 206 L${VW} 330 L0 330 Z`, fill: "#e4f2da" }, stage);
   // grass ground
-  el("rect", { x: 0, y: GROUND, width: 900, height: 48, fill: "#dcefcf" }, stage);
+  el("rect", { x: 0, y: GROUND, width: VW, height: 48, fill: "#dcefcf" }, stage);
   // the green grass line with tufts
   let tufts = "";
-  for (let x = 6; x < 900; x += 14) tufts += `M${x} ${GROUND} l4 -10 l3 10 l4 -7 l3 7 `;
+  for (let x = 6; x < VW; x += 14) tufts += `M${x} ${GROUND} l4 -10 l3 10 l4 -7 l3 7 `;
   el("path", { d: tufts, fill: "none", stroke: "#4f9a33", "stroke-width": 2, "stroke-linejoin": "round" }, stage);
-  el("line", { x1: 0, x2: 900, y1: GROUND, y2: GROUND, stroke: "#4f9a33", "stroke-width": 5, "stroke-linecap": "round" }, stage);
+  el("line", { x1: 0, x2: VW, y1: GROUND, y2: GROUND, stroke: "#4f9a33", "stroke-width": 5, "stroke-linecap": "round" }, stage);
 
   // landing marks + labels
   state.notes.forEach((deg, i) => {
@@ -551,7 +566,7 @@ function renderStage() {
   labelLayer = el("g", {}, stage);
 
   if (!state.notes.length) {
-    const t = el("text", { x: 450, y: 150, "text-anchor": "middle", "font-size": 20, fill: "#5d6d78" }, stage);
+    const t = el("text", { x: VW / 2, y: 150, "text-anchor": "middle", "font-size": 20, fill: "#5d6d78" }, stage);
     t.textContent = "先在五線譜寫最少兩個音符";
   }
   // animal
@@ -568,12 +583,14 @@ function addLabel(i) {
   const d1 = state.notes[i], d2 = state.notes[i + 1];
   const deg = Math.abs(d2 - d1);
   const x = (landX(i) + landX(i + 1)) / 2;
-  const y = GROUND - 8 - jumpH(deg) - 12;
+  const narrow = VW < 900;
+  const y = GROUND - 8 - jumpH(deg) - 12 - (narrow && i % 2 ? 30 : 0);
   const g = el("g", {}, labelLayer);
   const txt = DEG_NAME[deg] + (d2 > d1 ? " ↑" : d2 < d1 ? " ↓" : "");
-  const w = txt.length * 15 + 14;
-  el("rect", { x: x - w / 2, y: y - 22, width: w, height: 28, rx: 14, fill: "#ffffff", stroke: "#e8781e", "stroke-width": 2 }, g);
-  const t = el("text", { x, y: y - 2, "text-anchor": "middle", "font-size": 17, "font-weight": 700, fill: "#b45309", "font-family": "LXGW WenKai TC, PingFang TC, Microsoft JhengHei, sans-serif" }, g);
+  const fs = narrow ? 14 : 17;
+  const w = txt.length * fs * 0.88 + 12;
+  el("rect", { x: x - w / 2, y: y - fs - 5, width: w, height: fs + 11, rx: (fs + 11) / 2, fill: "#ffffff", stroke: "#e8781e", "stroke-width": 2 }, g);
+  const t = el("text", { x, y: y - 2, "text-anchor": "middle", "font-size": fs, "font-weight": 700, fill: "#b45309", "font-family": "LXGW WenKai TC, PingFang TC, Microsoft JhengHei, sans-serif" }, g);
   t.textContent = txt;
 }
 
