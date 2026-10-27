@@ -221,6 +221,7 @@ h1 {
     </div>
     <div class="notes-pad" id="pad"></div>
     <div class="toolbar">
+      <button class="btn" id="listen" type="button">♪ 聽我的旋律</button>
       <button class="btn" id="undo" type="button">刪除最後一個</button>
       <button class="btn" id="clear" type="button">全部清除</button>
       <span class="count" id="count"></span>
@@ -297,10 +298,10 @@ const KEYS = {
 const MAX = 8;
 
 /* state: notes are scale degrees 0..7 (0 = do, 7 = high do) */
-const state = { animal: "rabbit", key: "C", notes: [0, 2, 4, 2, 7, 4, 0], showSolfa: false, playing: false };
+const state = { animal: "rabbit", key: "C", notes: [], showSolfa: false, playing: false };
 try {
   const saved = JSON.parse(localStorage.getItem("interval-hop") || "null");
-  if (saved && Array.isArray(saved.notes)) Object.assign(state, saved, { playing: false });
+  if (saved) { if (saved.animal) state.animal = saved.animal; if (saved.key === "C" || saved.key === "F") state.key = saved.key; }
 } catch (e) {}
 state.showSolfa = true;   // 唱名一定顯示
 function save() {
@@ -354,6 +355,7 @@ const SP = 24;               // space between staff lines
 const BOTTOM = 190;          // y of bottom line (E4)
 const stepY = s => BOTTOM - s * SP / 2;
 const SLOT_X0 = 238;
+let listenIdx = -1, listenTimer = null;
 let SLOT_DX = 84, VW = 900;   // narrower score on phones
 function layout() {
   const narrow = document.querySelector(".wrap").clientWidth < 600;
@@ -405,8 +407,8 @@ function drawScore(svg, xOf, activeIdx, opts = {}) {
   el("path", { d: CLEF_PATH, fill: ink, transform: `translate(4 ${stepY(2)}) scale(${k} ${-k}) translate(0 -160)` }, svg);
   let doX = 150;
   if (state.key === "F") {
-    const kf = SP / 300;
-    el("path", { d: FLAT_PATH, fill: ink, transform: `translate(98 ${stepY(4)}) scale(${kf} ${-kf}) translate(0 -60)` }, svg);
+    const kf = SP / 360;
+    el("path", { d: FLAT_PATH, fill: ink, transform: `translate(98 ${stepY(4)}) scale(${kf} ${-kf}) translate(0 -205)` }, svg);
     doX = 162;
   }
   // purple "d" box marks where do is
@@ -430,7 +432,7 @@ function drawScore(svg, xOf, activeIdx, opts = {}) {
   });
 }
 
-function renderStaff(activeIdx = -1) {
+function renderStaff(activeIdx = listenIdx) {
   drawScore(staff, slotX, activeIdx, { slots: true });
   drawScore(stageStaff, landX, activeIdx, { trailDone: true });
   // hover ghost
@@ -473,6 +475,7 @@ staff.addEventListener("click", e => {
 });
 function setNote(slot, deg) {
   if (slot >= MAX) { flash("最多只可以寫八個音符。"); return; }
+  stopListen();
   if (slot < state.notes.length) state.notes[slot] = deg; else state.notes.push(deg);
   tone(KEYS[state.key].freqs[deg]);
   flash("");
@@ -495,15 +498,39 @@ function renderPad() {
   });
 }
 
-document.getElementById("undo").addEventListener("click", () => { if (state.playing) return; state.notes.pop(); save(); renderAll(); });
-document.getElementById("clear").addEventListener("click", () => { if (state.playing) return; state.notes = []; save(); renderAll(); });
+document.getElementById("undo").addEventListener("click", () => { if (state.playing) return; stopListen(); state.notes.pop(); save(); renderAll(); });
+document.getElementById("clear").addEventListener("click", () => { if (state.playing) return; stopListen(); state.notes = []; save(); renderAll(); });
 
+
+/* listen to the whole melody */
+const listenBtn = document.getElementById("listen");
+function stopListen() {
+  if (listenTimer === null && listenIdx === -1) return;
+  clearTimeout(listenTimer); listenTimer = null; listenIdx = -1;
+  listenBtn.textContent = "♪ 聽我的旋律";
+  renderStaff();
+}
+listenBtn.addEventListener("click", () => {
+  if (listenTimer !== null) { stopListen(); return; }
+  if (!state.notes.length || state.playing) return;
+  listenBtn.textContent = "■ 停止";
+  let i = 0;
+  const step = () => {
+    if (i >= state.notes.length) { listenTimer = setTimeout(stopListen, 500); return; }
+    tone(KEYS[state.key].freqs[state.notes[i]]);
+    listenIdx = i; renderStaff();
+    i++;
+    listenTimer = setTimeout(step, 650);
+  };
+  step();
+});
 
 const msg = document.getElementById("msg");
 function flash(t) { msg.textContent = t; }
 
 function renderCount() {
   document.getElementById("count").innerHTML = `音符 <b>${state.notes.length}</b> / ${MAX}`;
+  document.getElementById("listen").disabled = !state.notes.length || state.playing;
   document.getElementById("undo").disabled = !state.notes.length || state.playing;
   document.getElementById("clear").disabled = !state.notes.length || state.playing;
   document.getElementById("play").disabled = (state.notes.length < 2 || !quiz.passed[state.key]) && !state.playing;
@@ -632,6 +659,7 @@ function stop() {
   renderStaff();
 }
 function start() {
+  stopListen();
   hover = null;
   renderStage();
   setPlaying(true);
@@ -710,8 +738,8 @@ function drawQuizStaff(showCount) {
   el("path", { d: CLEF_PATH, fill: ink, transform: `translate(2 ${stepY(2)}) scale(${k} ${-k}) translate(0 -160)` }, svg);
   let doX = 150;
   if (state.key === "F") {
-    const kf = SP / 300;
-    el("path", { d: FLAT_PATH, fill: ink, transform: `translate(96 ${stepY(4)}) scale(${kf} ${-kf}) translate(0 -60)` }, svg);
+    const kf = SP / 360;
+    el("path", { d: FLAT_PATH, fill: ink, transform: `translate(96 ${stepY(4)}) scale(${kf} ${-kf}) translate(0 -205)` }, svg);
     doX = 162;
   }
   const base = KEYS[state.key].baseStep;
